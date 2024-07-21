@@ -30,7 +30,7 @@ func main() {
 
 	//增加RestFul
 
-	server.Route("POST", "/user/signup", SignUp)
+	server.Route(http.MethodPost, "/user/signup", SignUp)
 	//server.Route("/order", order)
 	err := server.Start(":8080")
 	if err != nil {

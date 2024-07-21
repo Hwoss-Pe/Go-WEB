@@ -8,7 +8,7 @@ import (
 type Server interface {
 	//	对于一个服务器，接口定义来说肯定会有路由和启动的作用
 	//handleFunc func(ctx *Context) 这个是为了在服务器内部进行封装上下文
-	Route(method string, pattern string, handleFunc func(ctx *Context))
+	Routable
 
 	Start(address string) error
 }
@@ -16,23 +16,39 @@ type Server interface {
 // 启动类显然要去实现上面的接口
 type sdkHttpServer struct {
 	Name    string
-	handler *HandlerBaseOnMap
+	handler Handler
+	root    Filter
 }
 
+// Route 这个route方法显然可以.了两次，把把他丢进map里封装
 func (s *sdkHttpServer) Route(
 	method string, pattern string,
 	handleFunc func(ctx *Context)) {
-	key := s.handler.key(method, pattern)
-	s.handler.handlers[key] = handleFunc
+	s.handler.Route(method, pattern, handleFunc)
 }
 
 func (s *sdkHttpServer) Start(address string) error {
-
+	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		c := NewContext(writer, request)
+		s.root(c)
+	})
+	//http.Handle("/", s.handler)
 	return http.ListenAndServe(address, nil)
 }
-func NewServer(name string) Server {
+func NewServer(name string, builders ...FilterBuilder) Server {
+	handler := NewHandlerBaseOnMap()
+	var root Filter = func(c *Context) {
+		handler.ServeHTTP(c.W, c.R)
+	}
+
+	for i := len(builders); i >= 0; i-- {
+		b := builders[i]
+		root = b(root)
+	}
 	return &sdkHttpServer{
-		Name: name,
+		Name:    name,
+		handler: handler,
+		root:    root,
 	}
 }
 
