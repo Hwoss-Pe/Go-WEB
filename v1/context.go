@@ -49,4 +49,3 @@ func (c *Context) BadRequestJson(data interface{}) error {
 	// http 库里面提前定义好了各种响应码
 	return c.writeJson(http.StatusBadRequest, data)
 }
-1
