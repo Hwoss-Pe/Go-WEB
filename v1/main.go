@@ -22,6 +22,9 @@ func order(w http.ResponseWriter, r *http.Request) {
 }
 func main() {
 	//优化1 这里会有很多路由和对应handler的操作,以及启动，因此这里可以抽象出一个接口
+	//优化2 抽象是上下文Context
+	//优化3 用map来支持RestFul
+	//优化4 责任链的定义使用
 
 	server := NewServer("test-server")
 	//server.Route("/", home)

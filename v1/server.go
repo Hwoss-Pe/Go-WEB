@@ -9,11 +9,12 @@ type Server interface {
 	//	对于一个服务器，接口定义来说肯定会有路由和启动的作用
 	//handleFunc func(ctx *Context) 这个是为了在服务器内部进行封装上下文
 	Routable
-
 	Start(address string) error
 }
 
 // 启动类显然要去实现上面的接口
+var _ Server = &sdkHttpServer{}
+
 type sdkHttpServer struct {
 	Name    string
 	handler Handler
@@ -30,6 +31,7 @@ func (s *sdkHttpServer) Route(
 func (s *sdkHttpServer) Start(address string) error {
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		c := NewContext(writer, request)
+		//在服务器启动的时候调用就可以在下面子通过循环自动执行了,因为root在创建的时候就封装好了
 		s.root(c)
 	})
 	//http.Handle("/", s.handler)
@@ -37,14 +39,17 @@ func (s *sdkHttpServer) Start(address string) error {
 }
 func NewServer(name string, builders ...FilterBuilder) Server {
 	handler := NewHandlerBaseOnMap()
+	//这是最后执行的地方
 	var root Filter = func(c *Context) {
 		handler.ServerHTTP(c)
 	}
 
-	for i := len(builders); i >= 0; i-- {
+	//如果服务器启动传入的builder是正序，那么遍历是倒序，理解就是循环调用，递归  root = b(b(root))
+	for i := len(builders) - 1; i >= 0; i-- {
 		b := builders[i]
 		root = b(root)
 	}
+	//封装root，并且复制等待调用就可以递归调用
 	return &sdkHttpServer{
 		Name:    name,
 		handler: handler,

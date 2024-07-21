@@ -15,9 +15,11 @@ type Handler interface {
 	Routable
 }
 
+// 启动的时候进行路由
 func (h *HandlerBaseOnMap) Route(
 	method string, pattern string,
 	handleFunc func(ctx *Context)) {
+
 	key := h.key(method, pattern)
 	h.handlers[key] = handleFunc
 }

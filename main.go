@@ -2,67 +2,118 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 )
 
+type Context struct {
+	W http.ResponseWriter
+	R *http.Request
+}
+
+type Filter func(c *Context)
+type FilterBuilder func(next Filter) Filter
+
+type Server interface {
+	Route(method string, pattern string, handleFunc func(ctx *Context))
+	Start(address string) error
+}
+
+type sdkHttpServer struct {
+	Name    string
+	handler Handler
+	root    Filter
+}
+
+type Handler interface {
+	Route(method string, pattern string, handleFunc func(ctx *Context))
+	ServeHTTP(c *Context)
+}
+
+type HandlerBaseOnMap struct {
+	// 路由表
+	handlers map[string]func(ctx *Context)
+}
+
+func NewHandlerBaseOnMap() *HandlerBaseOnMap {
+	return &HandlerBaseOnMap{
+		handlers: make(map[string]func(ctx *Context)),
+	}
+}
+
+func (h *HandlerBaseOnMap) Route(method string, pattern string, handleFunc func(ctx *Context)) {
+	key := fmt.Sprintf("%s#%s", method, pattern)
+	h.handlers[key] = handleFunc
+}
+
+func (h *HandlerBaseOnMap) ServeHTTP(c *Context) {
+	key := fmt.Sprintf("%s#%s", c.R.Method, c.R.URL.Path)
+	if handler, ok := h.handlers[key]; ok {
+		handler(c)
+	} else {
+		c.W.WriteHeader(http.StatusNotFound)
+		_, _ = c.W.Write([]byte("404 - Not Found"))
+	}
+}
+
+func logFilterBuilder(next Filter) Filter {
+	return func(c *Context) {
+		fmt.Println("Log Filter: Request received")
+		next(c)
+	}
+}
+
+func authFilterBuilder(next Filter) Filter {
+	return func(c *Context) {
+		fmt.Println("Auth Filter: Checking authentication")
+		next(c)
+	}
+}
+
+func NewServer(name string, builders ...FilterBuilder) Server {
+	handler := NewHandlerBaseOnMap()
+	var root Filter = func(c *Context) {
+		handler.ServeHTTP(c)
+	}
+
+	for i := len(builders) - 1; i >= 0; i-- {
+		b := builders[i]
+		root = b(root)
+	}
+	return &sdkHttpServer{
+		Name:    name,
+		handler: handler,
+		root:    root,
+	}
+}
+
+func (s *sdkHttpServer) Route(method string, pattern string, handleFunc func(ctx *Context)) {
+	s.handler.Route(method, pattern, handleFunc)
+}
+
+func (s *sdkHttpServer) Start(address string) error {
+	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		c := NewContext(writer, request)
+		s.root(c)
+	})
+	return http.ListenAndServe(address, nil)
+}
+
+func NewContext(w http.ResponseWriter, r *http.Request) *Context {
+	return &Context{
+		W: w,
+		R: r,
+	}
+}
+
 func main() {
-	//fmt.Println("hello world")
-	//var a = 10
-	//b := "hello"
-	//newString := fmt.Sprintf("%d + %s", a, b)
-	//fmt.Println(newString)
+	server := NewServer("MyServer", logFilterBuilder, authFilterBuilder)
 
-	var a = "Runoob"
-	fmt.Println(a)
+	server.Route("GET", "/hello", func(ctx *Context) {
+		fmt.Fprintf(ctx.W, "Hello, world!")
+	})
 
-	var b, c = 1, 2
-	fmt.Println(b, c)
-	var n [10]int /* n 是一个长度为 10 的数组 */
-	var i, j int
-
-	/* 为数组 n 初始化元素 */
-	for i = 0; i < 10; i++ {
-		n[i] = i + 100 /* 设置元素为 i + 100 */
-	}
-
-	/* 输出每个数组元素的值 */
-	for j = 0; j < 10; j++ {
-		fmt.Printf("Element[%d] = %d\n", j, n[j])
-	}
-	TestForRangeDelayBidding()
-
-}
-func TestForRangeDelayBidding() {
-	list := []int{1, 2, 3, 4, 5}
-	var funcList []func()
-	for _, v := range list {
-		f := func() {
-			fmt.Println(v)
-		}
-		funcList = append(funcList, f)
-	}
-	for _, f := range funcList {
-		f()
-	}
-
-	Delay()
-}
-
-func ReturnClosure(name string) func() string {
-	return func() string {
-		return "Hello, " + name
-	}
-}
-
-func Delay() {
-	fns := make([]func(), 0, 10)
-
-	for i := 0; i < 10; i++ {
-		fns = append(fns, func() {
-			fmt.Printf("hello, this is : %d \n", i)
-		})
-	}
-
-	for _, fn := range fns {
-		fn()
+	fmt.Println("Starting server at :8080")
+	if err := server.Start(":8080"); err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
 	}
 }
