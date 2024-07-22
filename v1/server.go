@@ -24,7 +24,7 @@ type sdkHttpServer struct {
 // Route 这个route方法显然可以.了两次，把把他丢进map里封装
 func (s *sdkHttpServer) Route(
 	method string, pattern string,
-	handleFunc func(ctx *Context)) {
+	handleFunc handleFunc) {
 	s.handler.Route(method, pattern, handleFunc)
 }
 

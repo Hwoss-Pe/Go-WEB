@@ -3,11 +3,11 @@ package v1
 import "net/http"
 
 type Routable interface {
-	Route(method string, pattern string, handleFunc func(ctx *Context))
+	Route(method string, pattern string, handleFunc handleFunc)
 }
 type HandlerBaseOnMap struct {
 	//key是对应的请求方式加路径
-	handlers map[string]func(ctx *Context)
+	handlers map[string]handleFunc
 }
 
 type Handler interface {
@@ -18,7 +18,7 @@ type Handler interface {
 // 启动的时候进行路由
 func (h *HandlerBaseOnMap) Route(
 	method string, pattern string,
-	handleFunc func(ctx *Context)) {
+	handleFunc handleFunc) {
 
 	key := h.key(method, pattern)
 	h.handlers[key] = handleFunc
@@ -48,6 +48,6 @@ var _ Handler = &HandlerBaseOnMap{}
 func NewHandlerBaseOnMap() Handler {
 	return &HandlerBaseOnMap{
 		//这里就是路由修改
-		handlers: make(map[string]func(c *Context), 128),
+		handlers: make(map[string]handleFunc, 128),
 	}
 }

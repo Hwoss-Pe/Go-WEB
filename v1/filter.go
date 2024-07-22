@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+type handleFunc func(c *Context)
+
 // FilterBuilder 声明具有参数和返回值的都实现了FilterBuilder
 type FilterBuilder func(next Filter) Filter
 
