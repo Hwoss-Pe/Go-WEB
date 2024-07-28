@@ -13,7 +13,7 @@ type Server interface {
 }
 
 // 启动类显然要去实现上面的接口
-var _ Server = &sdkHttpServer{}
+//var _ Server = &sdkHttpServer{}
 
 type sdkHttpServer struct {
 	Name    string
@@ -37,25 +37,31 @@ func (s *sdkHttpServer) Start(address string) error {
 	//http.Handle("/", s.handler)
 	return http.ListenAndServe(address, nil)
 }
-func NewServer(name string, builders ...FilterBuilder) Server {
-	handler := NewHandlerBaseOnMap()
-	//这是最后执行的地方
-	var root Filter = func(c *Context) {
-		handler.ServerHTTP(c)
-	}
 
-	//如果服务器启动传入的builder是正序，那么遍历是倒序，理解就是循环调用，递归  root = b(b(root))
-	for i := len(builders) - 1; i >= 0; i-- {
-		b := builders[i]
-		root = b(root)
-	}
-	//封装root，并且复制等待调用就可以递归调用
-	return &sdkHttpServer{
-		Name:    name,
-		handler: handler,
-		root:    root,
-	}
+func (s *sdkHttpServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	c := NewContext(writer, request)
+	s.root(c)
 }
+
+//func NewServer(name string, builders ...FilterBuilder) Server {
+//	handler := NewHandlerBaseOnMap()
+//	//这是最后执行的地方
+//	var root Filter = func(c *Context) {
+//		handler.ServerHTTP(c)
+//	}
+//
+//	//如果服务器启动传入的builder是正序，那么遍历是倒序，理解就是循环调用，递归  root = b(b(root))
+//	for i := len(builders) - 1; i >= 0; i-- {
+//		b := builders[i]
+//		root = b(root)
+//	}
+//	//封装root，并且复制等待调用就可以递归调用
+//	return &sdkHttpServer{
+//		Name:    name,
+//		handler: handler,
+//		root:    root,
+//	}
+//}
 
 // SignUp 下面可以发现我只是读取json数据 并返回的操作就需要一堆校验，因此还可以抽象出Context
 func SignUp(ctx *Context) {
@@ -85,13 +91,6 @@ type commonResponse struct {
 	BizCode int         `json:"biz_code"`
 	Msg     string      `json:"msg"`
 	Data    interface{} `json:"data"`
-}
-
-func NewContext(w http.ResponseWriter, r *http.Request) *Context {
-	return &Context{
-		W: w,
-		R: r,
-	}
 }
 
 // 工厂模式的创建

@@ -1,4 +1,4 @@
-package main
+package web
 
 import (
 	"fmt"
@@ -106,14 +106,14 @@ func NewContext(w http.ResponseWriter, r *http.Request) *Context {
 }
 
 func main() {
-	server := NewServer("MyServer", logFilterBuilder, authFilterBuilder)
-
-	server.Route("GET", "/hello", func(ctx *Context) {
-		fmt.Fprintf(ctx.W, "Hello, world!")
-	})
-
-	fmt.Println("Starting server at :8080")
-	if err := server.Start(":8080"); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
-	}
+	//server := NewServer("MyServer", logFilterBuilder, authFilterBuilder)
+	//
+	//server.Route("GET", "/hello", func(ctx *Context) {
+	//	fmt.Fprintf(ctx.W, "Hello, world!")
+	//})
+	//
+	//fmt.Println("Starting server at :8080")
+	//if err := server.Start(":8080"); err != nil {
+	//	fmt.Printf("Error starting server: %v\n", err)
+	//}
 }

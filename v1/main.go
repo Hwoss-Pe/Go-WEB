@@ -26,17 +26,17 @@ func main() {
 	//优化3 用map来支持RestFul
 	//优化4 责任链的定义使用
 
-	server := NewServer("test-server")
-	//server.Route("/", home)
-	//server.Route("/user", user)
-	//server.Route("/user/create", createUser)
-
-	//增加RestFul
-
-	server.Route(http.MethodPost, "/user/signup", SignUp)
-	//server.Route("/order", order)
-	err := server.Start(":8080")
-	if err != nil {
-		return
-	}
+	//server := NewServer("test-server")
+	////server.Route("/", home)
+	////server.Route("/user", user)
+	////server.Route("/user/create", createUser)
+	//
+	////增加RestFul
+	//
+	//server.Route(http.MethodPost, "/user/signup", SignUp)
+	////server.Route("/order", order)
+	//err := server.Start(":8080")
+	//if err != nil {
+	//	return
+	//}
 }

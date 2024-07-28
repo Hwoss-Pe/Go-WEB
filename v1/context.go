@@ -8,8 +8,9 @@ import (
 
 // Context 如果不需要拓展写成结构体
 type Context struct {
-	W http.ResponseWriter
-	R *http.Request
+	W          http.ResponseWriter
+	R          *http.Request
+	PathParams map[string]string
 }
 
 // ReadJson 读取body，反序列化
@@ -48,4 +49,12 @@ func (c *Context) SystemErrJson(data interface{}) error {
 func (c *Context) BadRequestJson(data interface{}) error {
 	// http 库里面提前定义好了各种响应码
 	return c.writeJson(http.StatusBadRequest, data)
+}
+
+func NewContext(w http.ResponseWriter, r *http.Request) *Context {
+	return &Context{
+		W:          w,
+		R:          r,
+		PathParams: make(map[string]string),
+	}
 }
