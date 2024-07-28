@@ -2,7 +2,10 @@ module test
 
 go 1.22.0
 
-require github.com/stretchr/testify v1.9.0
+require (
+	github.com/hashicorp/golang-lru v1.0.2
+	github.com/stretchr/testify v1.9.0
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

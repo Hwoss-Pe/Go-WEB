@@ -1,119 +1,91 @@
-package web
+package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"test/demo"
+	"test/pkg"
+	"time"
 )
 
-type Context struct {
-	W http.ResponseWriter
-	R *http.Request
+func home(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "这是主页")
 }
 
-type Filter func(c *Context)
-type FilterBuilder func(next Filter) Filter
-
-type Server interface {
-	Route(method string, pattern string, handleFunc func(ctx *Context))
-	Start(address string) error
+func user(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "这是用户")
 }
 
-type sdkHttpServer struct {
-	Name    string
-	handler Handler
-	root    Filter
+func createUser(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "这是创建用户")
 }
 
-type Handler interface {
-	Route(method string, pattern string, handleFunc func(ctx *Context))
-	ServeHTTP(c *Context)
-}
-
-type HandlerBaseOnMap struct {
-	// 路由表
-	handlers map[string]func(ctx *Context)
-}
-
-func NewHandlerBaseOnMap() *HandlerBaseOnMap {
-	return &HandlerBaseOnMap{
-		handlers: make(map[string]func(ctx *Context)),
-	}
-}
-
-func (h *HandlerBaseOnMap) Route(method string, pattern string, handleFunc func(ctx *Context)) {
-	key := fmt.Sprintf("%s#%s", method, pattern)
-	h.handlers[key] = handleFunc
-}
-
-func (h *HandlerBaseOnMap) ServeHTTP(c *Context) {
-	key := fmt.Sprintf("%s#%s", c.R.Method, c.R.URL.Path)
-	if handler, ok := h.handlers[key]; ok {
-		handler(c)
-	} else {
-		c.W.WriteHeader(http.StatusNotFound)
-		_, _ = c.W.Write([]byte("404 - Not Found"))
-	}
-}
-
-func logFilterBuilder(next Filter) Filter {
-	return func(c *Context) {
-		fmt.Println("Log Filter: Request received")
-		next(c)
-	}
-}
-
-func authFilterBuilder(next Filter) Filter {
-	return func(c *Context) {
-		fmt.Println("Auth Filter: Checking authentication")
-		next(c)
-	}
-}
-
-func NewServer(name string, builders ...FilterBuilder) Server {
-	handler := NewHandlerBaseOnMap()
-	var root Filter = func(c *Context) {
-		handler.ServeHTTP(c)
-	}
-
-	for i := len(builders) - 1; i >= 0; i-- {
-		b := builders[i]
-		root = b(root)
-	}
-	return &sdkHttpServer{
-		Name:    name,
-		handler: handler,
-		root:    root,
-	}
-}
-
-func (s *sdkHttpServer) Route(method string, pattern string, handleFunc func(ctx *Context)) {
-	s.handler.Route(method, pattern, handleFunc)
-}
-
-func (s *sdkHttpServer) Start(address string) error {
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		c := NewContext(writer, request)
-		s.root(c)
-	})
-	return http.ListenAndServe(address, nil)
-}
-
-func NewContext(w http.ResponseWriter, r *http.Request) *Context {
-	return &Context{
-		W: w,
-		R: r,
-	}
+func order(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "这是订单")
 }
 
 func main() {
-	//server := NewServer("MyServer", logFilterBuilder, authFilterBuilder)
+	shutdown := pkg.NewGracefulShutdown()
+	server := pkg.NewSdkHttpServer("my-test-server",
+		pkg.MetricFilterBuilder, shutdown.ShutdownFilterBuilder)
+	adminServer := pkg.NewSdkHttpServer("admin-test-server",
+		// 注意，如果你真实环境里面，使用的是多个 server监听不同端口，
+		// 那么这个 shutdown最好也是多个。互相之间就不会有竞争
+		// MetricFilterBuilder 是无状态的，所以不存在这种问题
+		pkg.MetricFilterBuilder, shutdown.ShutdownFilterBuilder)
+
+	// 注册路由
+	_ = server.Route("POST", "/user/create/*", demo.SignUp)
+	_ = server.Route("POST", "/slowService", demo.SlowService)
+
+	// 准备静态路由
+
+	staticHandler := pkg.NewStaticResourceHandler(
+		"demo/static", "/static",
+		pkg.WithMoreExtension(map[string]string{
+			"mp3": "audio/mp3",
+		}), pkg.WithFileCache(1<<20, 100))
+	// 访问 Get http://localhost:8080/static/forest.png
+	server.Route("GET", "/static/*", staticHandler.ServeStaticResource)
+
+	go func() {
+		if err := adminServer.Start(":8081"); err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		if err := server.Start(":8080"); err != nil {
+			// 快速失败，因为服务器都没启动成功，啥也做不了
+			panic(err)
+		}
+		// 假设我们后面还有很多动作
+	}()
+
+	// 先执行 RejectNewRequestAndWaiting，等待所有的请求
+	// 然后我们关闭 server，如果是多个 server，可以多个 goroutine 一起关闭
 	//
-	//server.Route("GET", "/hello", func(ctx *Context) {
-	//	fmt.Fprintf(ctx.W, "Hello, world!")
-	//})
-	//
-	//fmt.Println("Starting server at :8080")
-	//if err := server.Start(":8080"); err != nil {
-	//	fmt.Printf("Error starting server: %v\n", err)
-	//}
+	pkg.WaitForShutdown(
+		func(ctx context.Context) error {
+			// 假设我们这里有一个 hook
+			// 可以通知网关我们要下线了
+			fmt.Println("mock notify gateway")
+			time.Sleep(time.Second * 2)
+			return nil
+		},
+		shutdown.RejectNewRequestAndWaiting,
+		// 全部请求处理完了我们就可以关闭 server了
+		pkg.BuildCloseServerHook(server, adminServer),
+		func(ctx context.Context) error {
+			// 假设这里我要清理一些执行过程中生成的临时资源
+			fmt.Println("mock release resources")
+			time.Sleep(time.Second * 2)
+			return nil
+		})
+
+	// filterNames := ReadFromConfig
+	// 匿名引入之后，就可以在这里按名索引 filter
+	//pkg.NewSdkHttpServerWithFilterNames("my-server", filterNames...)
+
 }
